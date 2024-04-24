@@ -1,7 +1,7 @@
 import operator
 from typing import List, Optional, Tuple, Union
 
-from vyper.codegen.ir_node import IRnode, _WithBuilder
+from vyper.codegen.ir_node import IRnode, scope_multi
 from vyper.evm.opcodes import version_check
 from vyper.exceptions import CompilerPanic, StaticAssertionException
 from vyper.utils import (
@@ -411,17 +411,32 @@ unique_id = 0
 # Inline complex nodes so that they are not run multiple times. The goal of this
 # pass is to replace the with.cache_when_complex construct, which inlines complex
 # nodes in bodies
-def _inline_complex(ir_node, body):
+def _inline_complex(body):
+    ir_nodes = get_complex_nodes(body)    
+    
+    # If body doesn't have any complex ir nodes in it, return body. 
+    # Note: because _optimize is not cached, this could be very bad performance wise.
+    # We should probably introduce caching to make this cheaper.
+    # Where to recurse?
+    if not len(ir_nodes):
+        return body
+    
+    ir_node_names = []
+    for _ in ir_nodes:
+        ir_node_names.push_back("ir_node_" + unique_id)
+        unique_id += 1
+    yield scope_multi(ir_nodes, ir_node_names)
+
     # inline complex ir nodes
-    should_inline = not ir_node._optimized.is_complex_ir
+    #should_inline = not ir_node._optimized.is_complex_ir
     
     # TODO: use scope_multi as a helper. 
-    if should_inline:
-        builder = _WithBuilder(ir_node, "node_" + unique_id, should_inline)
-        unique_id += 1
-        return builder.resolve(body)
-    else:
-        return body 
+    #if should_inline:
+    #    builder = _WithBuilder(ir_node, "node_" + unique_id, should_inline)
+    #    unique_id += 1
+    #    return builder.resolve(body)
+    #else:
+    #    return body 
 
 def get_complex_nodes(body):
     complex_ir_nodes = []
@@ -432,6 +447,7 @@ def get_complex_nodes(body):
         # todo: do we want to identify if this is a leaf?
         if should_inline:
             complex_ir_nodes.append(arg)
+        
     return complex_ir_nodes
     
 
