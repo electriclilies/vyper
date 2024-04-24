@@ -411,46 +411,40 @@ unique_id = 0
 # Inline complex nodes so that they are not run multiple times. The goal of this
 # pass is to replace the with.cache_when_complex construct, which inlines complex
 # nodes in bodies
-def _inline_complex(body):
+def inline_complex(body):
     ir_nodes = get_complex_nodes(body)    
     
     # If body doesn't have any complex ir nodes in it, return body. 
     # Note: because _optimize is not cached, this could be very bad performance wise.
     # We should probably introduce caching to make this cheaper.
-    # Where to recurse?
     if not len(ir_nodes):
         return body
     
-    ir_node_names = []
-    for _ in ir_nodes:
-        ir_node_names.push_back("ir_node_" + unique_id)
+    # TODO: To make ids more readable, could do some mangling of the IR 
+    def make_unique_id():
+        name = "ir_node_" + unique_id
         unique_id += 1
-    yield scope_multi(ir_nodes, ir_node_names)
+        return name
 
-    # inline complex ir nodes
-    #should_inline = not ir_node._optimized.is_complex_ir
-    
-    # TODO: use scope_multi as a helper. 
-    #if should_inline:
-    #    builder = _WithBuilder(ir_node, "node_" + unique_id, should_inline)
-    #    unique_id += 1
-    #    return builder.resolve(body)
-    #else:
-    #    return body 
+    yield scope_multi(ir_nodes, [make_unique_id() for _ in ir_nodes])
 
-def get_complex_nodes(body):
-    complex_ir_nodes = []
+def _get_complex_nodes(body, complex_ir_nodes):
     for arg in body.args:
         # perf wise this seems bad since _optimized is not cached.
         should_inline = not arg._optimized.is_complex_ir
         
-        # todo: do we want to identify if this is a leaf?
         if should_inline:
             complex_ir_nodes.append(arg)
         
-    return complex_ir_nodes
-    
+        # Recurse into the arguments add 
+        for arg1 in arg.args:
+            _get_complex_nodes(arg1, complex_ir_nodes)
+        
 
+def get_complex_nodes(body):
+    complex_ir_nodes = []
+    _get_complex_nodes(body, complex_ir_nodes)
+    return complex_ir_nodes
 
 
 def _check_symbols(symbols, ir_node):
@@ -596,7 +590,7 @@ def _optimize(node: IRnode, parent: Optional[IRnode]) -> Tuple[bool, IRnode]:
         if _evm_int(argz[0]) == 0:
             raise StaticAssertionException(
                 f"assertion found to fail at compile time. (hint: did you mean `raise`?) {node}",
-                ast_s_optimize_binopource,
+                ast_source,
             )
         else:
             changed = True
