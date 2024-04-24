@@ -139,13 +139,13 @@ class Stmt:
         payload_buf = buf + 32
         bufsz -= 32  # reduce buffer by size of `method_id` slot
         encoded_length = abi_encode(payload_buf, msg_ir, self.context, bufsz, returns_len=True)
-        with encoded_length.cache_when_complex("encoded_len") as (b1, encoded_length):
-            revert_seq = [
-                "seq",
-                ["mstore", buf, method_id],
-                ["revert", buf + 28, ["add", 4, encoded_length]],
-            ]
-            revert_seq = b1.resolve(revert_seq)
+        #with encoded_length.cache_when_complex("encoded_len") as (b1, encoded_length):
+        revert_seq = [
+            "seq",
+            ["mstore", buf, method_id],
+            ["revert", buf + 28, ["add", 4, encoded_length]],
+        ]
+        #revert_seq = b1.resolve(revert_seq)
 
         if is_raise:
             ir_node = revert_seq
@@ -196,11 +196,11 @@ class Stmt:
             }
 
         if "bound" in kwargs:
-            with end.cache_when_complex("end") as (b1, end):
-                # note: the check for rounds<=rounds_bound happens in asm
-                # generation for `repeat`.
-                clamped_start = clamp_le(start, end, target_type.is_signed)
-                rounds = b1.resolve(IRnode.from_list(["sub", end, clamped_start]))
+            #with end.cache_when_complex("end") as (b1, end):
+            # note: the check for rounds<=rounds_bound happens in asm
+            # generation for `repeat`.
+            clamped_start = clamp_le(start, end, target_type.is_signed)
+            rounds = IRnode.from_list(["sub", end, clamped_start])
             rounds_bound = kwargs.pop("bound").int_value()
         else:
             rounds = end.int_value() - start.int_value()

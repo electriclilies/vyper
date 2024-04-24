@@ -408,23 +408,26 @@ class Expr:
         # flags can only do bit ops, not arithmetic.
         assert is_numeric_type(left.typ)
 
-        with left.cache_when_complex("x") as (b1, x), right.cache_when_complex("y") as (b2, y):
-            if isinstance(op, vy_ast.Add):
-                ret = arithmetic.safe_add(x, y)
-            elif isinstance(op, vy_ast.Sub):
-                ret = arithmetic.safe_sub(x, y)
-            elif isinstance(op, vy_ast.Mult):
-                ret = arithmetic.safe_mul(x, y)
-            elif isinstance(op, (vy_ast.Div, vy_ast.FloorDiv)):
-                ret = arithmetic.safe_div(x, y)
-            elif isinstance(op, vy_ast.Mod):
-                ret = arithmetic.safe_mod(x, y)
-            elif isinstance(op, vy_ast.Pow):
-                ret = arithmetic.safe_pow(x, y)
-            else:  # pragma: nocover
-                raise CompilerPanic("Unreachable")
+        # Removing this cache_when_complex breaks tests/functional/syntax/modulars/test_initializers.py on master
+        # with left.cache_when_complex("x") as (b1, x), right.cache_when_complex("y") as (b2, y):
+        x = left
+        y = right
+        if isinstance(op, vy_ast.Add):
+            ret = arithmetic.safe_add(x, y)
+        elif isinstance(op, vy_ast.Sub):
+            ret = arithmetic.safe_sub(x, y)
+        elif isinstance(op, vy_ast.Mult):
+            ret = arithmetic.safe_mul(x, y)
+        elif isinstance(op, (vy_ast.Div, vy_ast.FloorDiv)):
+            ret = arithmetic.safe_div(x, y)
+        elif isinstance(op, vy_ast.Mod):
+            ret = arithmetic.safe_mod(x, y)
+        elif isinstance(op, vy_ast.Pow):
+            ret = arithmetic.safe_pow(x, y)
+        else:  # pragma: nocover
+            raise CompilerPanic("Unreachable")
 
-            return IRnode.from_list(b1.resolve(b2.resolve(ret)), typ=out_typ)
+        return IRnode.from_list(ret, typ=out_typ)
 
     def build_in_comparator(self):
         left = Expr(self.expr.left, self.context).ir_node
