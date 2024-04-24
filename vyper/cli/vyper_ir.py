@@ -46,6 +46,8 @@ def compile_to_ir(input_file, output_formats, show_gas_estimates=False):
 
     compiler_data = {}
     ir = IRnode.from_list(s_expressions[0])
+    # TODO: should put this in a wrapper or something
+    ir = optimizer.inline_complex(ir)
     ir = optimizer.optimize(ir)
     if "ir" in output_formats:
         compiler_data["ir"] = ir

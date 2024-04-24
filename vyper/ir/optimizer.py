@@ -426,7 +426,7 @@ def inline_complex(body):
         unique_id += 1
         return name
 
-    yield scope_multi(ir_nodes, [make_unique_id() for _ in ir_nodes])
+    return scope_multi(ir_nodes, [make_unique_id() for _ in ir_nodes])
 
 def _get_complex_nodes(body, complex_ir_nodes):
     for arg in body.args:

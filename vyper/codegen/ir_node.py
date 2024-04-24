@@ -408,8 +408,6 @@ class IRnode:
             children = [self.args[0], self.args[2]]
         for arg in children:
             s = arg.unique_symbols
-            print(ret)
-            print(s)
             non_uniques = ret.intersection(s)
             assert len(non_uniques) == 0, f"non-unique symbols {non_uniques}"
             ret |= s
