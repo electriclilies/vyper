@@ -407,12 +407,13 @@ def _optimize_binop(binop, args, ann, parent_op):
     # no optimization happened
     return None
 
-unique_id = 0
 # Inline complex nodes so that they are not run multiple times. The goal of this
 # pass is to replace the with.cache_when_complex construct, which inlines complex
 # nodes in bodies
+unique_id = 0
 def inline_complex(body):
-    ir_nodes = get_complex_nodes(body)    
+    ir_nodes = get_complex_nodes(body)
+    print("complex ir_nodes: ", ir_nodes)
     
     # If body doesn't have any complex ir nodes in it, return body. 
     # Note: because _optimize is not cached, this could be very bad performance wise.
@@ -422,12 +423,20 @@ def inline_complex(body):
     
     # TODO: To make ids more readable, could do some mangling of the IR 
     def make_unique_id():
-        name = "ir_node_" + unique_id
+        # Is there a better way to do this? Ordinarily would put the unique_id on the builder
+        # but this is a standalone fn with no builder. 
+        global unique_id
+        name = "ir_node_" + str(unique_id)
         unique_id += 1
         return name
 
-    return scope_multi(ir_nodes, [make_unique_id() for _ in ir_nodes])
+    with scope_multi(ir_nodes, [make_unique_id() for _ in ir_nodes]) as (b, _):
+        return b.resolve(body)
 
+# TODO: There are duplicates in get_complex_nodes. I think this is maybe causing problems.
+# Two options: 
+#1: try to eliminate the duplication as we recurse from bottom up
+#2: try to make get_complex_nodes a set. 
 def _get_complex_nodes(body, complex_ir_nodes):
     for arg in body.args:
         # perf wise this seems bad since _optimized is not cached.

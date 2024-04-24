@@ -301,12 +301,25 @@ def generate_ir_nodes(global_ctx: ModuleT, settings: Settings) -> tuple[IRnode, 
         IR to generate deployment bytecode
         IR to generate runtime bytecode
     """
+    print("generate ir nodes")
     with anchor_settings(settings):
         ir_nodes, ir_runtime = module.generate_ir_for_module(global_ctx)
     if settings.optimize != OptimizationLevel.NONE:
+        print("optimizing")
+        print("ir nodes before inlining: ", ir_nodes)
         ir_nodes = optimizer.inline_complex(ir_nodes)
+        print("inlined complex")
+        print("ir nodes after inline_complex: ", ir_nodes)
         ir_nodes = optimizer.optimize(ir_nodes)
+        print("optimized ir nodes")
+        print("ir_nodes after optimize pass: ", ir_nodes)
+        ir_runtime = optimizer.inline_complex(ir_runtime)
+        print("inlined ir runtime")
         ir_runtime = optimizer.optimize(ir_runtime)
+    else:
+        print("not optimizing")
+        ir_nodes = optimizer.inline_complex(ir_nodes)
+        ir_runtime = optimizer.inline_complex(ir_runtime)
     return ir_nodes, ir_runtime
 
 
