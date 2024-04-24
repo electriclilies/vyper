@@ -49,6 +49,7 @@ class Encoding(Enum):
     # future: packed
 
 
+# TODO: this is the shortcut that might be helpful to use.
 # shortcut for chaining multiple cache_when_complex calls
 # CMC 2023-08-10 remove this _as soon as_ we have
 # real variables in IR (that we can declare without explicit scoping -
@@ -84,6 +85,8 @@ def scope_multi(ir_nodes, names):
 # this creates a magical block which maps to IR `with`
 class _WithBuilder:
     def __init__(self, ir_node, name, should_inline=False):
+        # Note: this check is redundant since _WithBuilder is only called once and it passes
+        # should_inline = ir_node._optimized.is_complex_ir
         if should_inline and ir_node._optimized.is_complex_ir:  # pragma: nocover
             # this can only mean trouble
             raise CompilerPanic("trying to inline a complex IR node")
@@ -103,6 +106,7 @@ class _WithBuilder:
         if self.should_inline:
             # return the value instead of the named variable
             # so it can be inlined
+            # self.ir_node is the VALUE, self.ir_var is the named variable
             return self, self.ir_node
         else:
             # return the named variable

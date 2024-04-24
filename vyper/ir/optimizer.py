@@ -1,7 +1,7 @@
 import operator
 from typing import List, Optional, Tuple, Union
 
-from vyper.codegen.ir_node import IRnode
+from vyper.codegen.ir_node import IRnode, _WithBuilder
 from vyper.evm.opcodes import version_check
 from vyper.exceptions import CompilerPanic, StaticAssertionException
 from vyper.utils import (
@@ -194,7 +194,6 @@ def _comparison_helper(binop, args, prefer_strict=False):
         # improve codesize (not gas), and maybe trigger
         # downstream optimizations
         return ("iszero", [["iszero", args[0]]])
-
 
 # def _optimize_arith(
 #    binop: str, args: IRArgs, ann: Optional[str], parent_op: Any = None
@@ -408,6 +407,35 @@ def _optimize_binop(binop, args, ann, parent_op):
     # no optimization happened
     return None
 
+unique_id = 0
+# Inline complex nodes so that they are not run multiple times. The goal of this
+# pass is to replace the with.cache_when_complex construct, which inlines complex
+# nodes in bodies
+def _inline_complex(ir_node, body):
+    # inline complex ir nodes
+    should_inline = not ir_node._optimized.is_complex_ir
+    
+    # TODO: use scope_multi as a helper. 
+    if should_inline:
+        builder = _WithBuilder(ir_node, "node_" + unique_id, should_inline)
+        unique_id += 1
+        return builder.resolve(body)
+    else:
+        return body 
+
+def get_complex_nodes(body):
+    complex_ir_nodes = []
+    for arg in body.args:
+        # perf wise this seems bad since _optimized is not cached.
+        should_inline = not arg._optimized.is_complex_ir
+        
+        # todo: do we want to identify if this is a leaf?
+        if should_inline:
+            complex_ir_nodes.append(arg)
+    return complex_ir_nodes
+    
+
+
 
 def _check_symbols(symbols, ir_node):
     # sanity check that no `unique_symbol`s got optimized out.
@@ -552,7 +580,7 @@ def _optimize(node: IRnode, parent: Optional[IRnode]) -> Tuple[bool, IRnode]:
         if _evm_int(argz[0]) == 0:
             raise StaticAssertionException(
                 f"assertion found to fail at compile time. (hint: did you mean `raise`?) {node}",
-                ast_source,
+                ast_s_optimize_binopource,
             )
         else:
             changed = True
