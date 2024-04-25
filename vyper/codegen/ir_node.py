@@ -360,11 +360,16 @@ class IRnode:
         else:  # pragma: nocover
             raise CompilerPanic(f"Invalid value for IR AST node: {self.value}")
         assert isinstance(self.args, list)
+
         # Replace any cached arguments with the correct variable.
         new_args = [] # Arg list containing references to the cached variables.
         replacedArg = False
         newVars = [] # List of new variables that we need to define.
-        for arg in self.args: 
+        print()
+        print("args: ", self.args)
+        for arg in self.args:
+            print("arg: ", arg)
+            print("type(arg):", type(arg))
             should_inline = not arg.is_complex_ir
             if should_inline:
                 # We're inlining arg, so don't try to replace the argument with a variable.
@@ -376,23 +381,24 @@ class IRnode:
                     new_args.append(cached_arg)
                 else:
                     # Create a variable to represent the argument, and add the variable to the cache.
-                    name = "ir_var_" + _id
-                    ir_var = IRnode.from_list(name, typ=self.typ, location=self.location, encoding=self.encoding)
-                    self.cache_node(_id, ir_var)
+                    ir_var_name = "ir_var_" + str(arg._id)
+                    ir_var = IRnode.from_list(ir_var_name, typ=self.typ, location=self.location, encoding=self.encoding)
+                    self.cache_node(arg._id, ir_var)
                     # Add the new variable to the list of variables we need to define in a "with" scope.
-                    newVars.append((ir_var, arg))
+                    newVars.append((ir_var_name, arg))
                 replacedArg = True
         
         if (replacedArg):
             self.args = new_args
         
         # Wrap self in "with" statements that define the new variables we just created
-        body = self
-        for (var, ir_node) in newVars:
-            body = IRnode.from_list(["with", var, ir_node, body])
+        body_list = self.args
+        print("new vars: ", newVars)
+        for (ir_var_name, ir_node) in newVars:
+            body_list = ["with", ir_var_name, ir_node, body_list]
 
         # Update args to include the new scoped "with" statement we just created.
-        self.args = body.args
+        self.args = body_list
 
 
     # deepcopy is a perf hotspot; it pays to optimize it a little
