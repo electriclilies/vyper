@@ -141,6 +141,7 @@ class IRnode:
 
     _id: int
     _next_id: int = -1
+    _cached_nodes : dict[int, "IRnode"] = {}
 
     def __init__(
         self,
@@ -359,6 +360,40 @@ class IRnode:
         else:  # pragma: nocover
             raise CompilerPanic(f"Invalid value for IR AST node: {self.value}")
         assert isinstance(self.args, list)
+        # Replace any cached arguments with the correct variable.
+        new_args = [] # Arg list containing references to the cached variables.
+        replacedArg = False
+        newVars = [] # List of new variables that we need to define.
+        for arg in self.args: 
+            should_inline = not arg.is_complex_ir
+            if should_inline:
+                # We're inlining arg, so don't try to replace the argument with a variable.
+                new_args.append(arg)
+            else:
+                # Check if we've already created a variable to represent this arg. If so, replace the argument IRnode with the variable.
+                cached_arg = self.get_cached_node(arg._id)
+                if cached_arg:
+                    new_args.append(cached_arg)
+                else:
+                    # Create a variable to represent the argument, and add the variable to the cache.
+                    name = "ir_var_" + _id
+                    ir_var = IRnode.from_list(name, typ=self.typ, location=self.location, encoding=self.encoding)
+                    self.cache_node(_id, ir_var)
+                    # Add the new variable to the list of variables we need to define in a "with" scope.
+                    newVars.append((ir_var, arg))
+                replacedArg = True
+        
+        if (replacedArg):
+            self.args = new_args
+        
+        # Wrap self in "with" statements that define the new variables we just created
+        body = self
+        for (var, ir_node) in newVars:
+            body = IRnode.from_list(["with", var, ir_node, body])
+
+        # Update args to include the new scoped "with" statement we just created.
+        self.args = body.args
+
 
     # deepcopy is a perf hotspot; it pays to optimize it a little
     def __deepcopy__(self, memo):
@@ -377,6 +412,19 @@ class IRnode:
         if self._id is None:
             self._id = self.generate_id()
 
+    @classmethod
+    def get_cached_node(cls, _id):
+        if _id in cls._cached_nodes:
+            return cls._cached_nodes[_id]
+        return None
+
+    @classmethod
+    def cache_node(cls, _id, ir_var):
+        if _id in cls._cached_nodes:
+            raise CompilerPanic("Can't cache a node twice!")
+        else:
+            cls._cached_nodes[_id] = ir_var
+        
     # TODO would be nice to rename to `gas_estimate` or `gas_bound`
     @property
     def gas(self):
