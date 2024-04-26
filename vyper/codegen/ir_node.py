@@ -158,6 +158,7 @@ class IRnode:
         is_self_call: bool = False,
         passthrough_metadata: dict[str, Any] = None,
         _id: int = None,
+        attempt_to_cache = True
     ):
         if args is None:
             args = []
@@ -361,46 +362,58 @@ class IRnode:
             raise CompilerPanic(f"Invalid value for IR AST node: {self.value}")
         assert isinstance(self.args, list)
 
-        # Replace any cached arguments with the correct variable.
-        new_args = [] # Arg list containing references to the cached variables.
-        replacedArg = False
-        newVars = [] # List of new variables that we need to define.
-        print()
-        print("args: ", self.args)
-        for arg in self.args:
-            print("arg: ", arg)
-            print("type(arg):", type(arg))
-            should_inline = not arg.is_complex_ir
-            if should_inline:
-                # We're inlining arg, so don't try to replace the argument with a variable.
-                new_args.append(arg)
-            else:
-                # Check if we've already created a variable to represent this arg. If so, replace the argument IRnode with the variable.
-                cached_arg = self.get_cached_node(arg._id)
-                if cached_arg:
-                    new_args.append(cached_arg)
+        if attempt_to_cache:
+            # Replace any cached arguments with the correct variable.
+            new_args = [] # Arg list containing references to the cached variables.
+            replacedArg = False
+            newVars = [] # List of new variables that we need to define.
+            print()
+            print("This IRnode: ")
+            print(self)
+            # hmm maybe we dont need to do this for the args, just for the self
+            print("self.value: ", self.value)
+            print("args: ", self.args)
+            for arg in self.args:
+                print("arg: ", arg)
+                print("type(arg):", type(arg))
+                should_inline = not arg.is_complex_ir
+                print("should_inline: ", should_inline)
+                if should_inline:
+                    # We're inlining arg, so don't try to replace the argument with a variable.
+                    new_args.append(arg)
                 else:
-                    # Create a variable to represent the argument, and add the variable to the cache.
-                    ir_var_name = "ir_var_" + str(arg._id)
-                    ir_var = IRnode.from_list(ir_var_name, typ=self.typ, location=self.location, encoding=self.encoding)
-                    self.cache_node(arg._id, ir_var)
-                    # Add the new variable to the list of variables we need to define in a "with" scope.
-                    newVars.append((ir_var_name, arg))
-                replacedArg = True
-        
-        if (replacedArg):
-            self.args = new_args
-        
-        # Wrap self in "with" statements that define the new variables we just created
-        body = self
-        print("new vars: ", newVars)
-        for (ir_var_name, ir_node) in newVars:
-            body = IRnode.from_list(["with", ir_var_name, ir_node, body], self.typ)
+                    # Check if we've already created a variable to represent this arg. If so, replace the argument IRnode with the variable.
+                    cached_arg = self.get_cached_node(arg._id)
+                    if cached_arg:
+                        new_args.append(cached_arg)
+                    else:
+                        # Create a variable to represent the argument, and add the variable to the cache.
+                        ir_var_name = "ir_var_" + str(arg._id)
+                        print("creating new ir var for: ", ir_var_name)
+                        ir_var = IRnode.from_list(ir_var_name, typ=self.typ, location=self.location, encoding=self.encoding, attempt_to_cache=False)
+                        self.cache_node(arg._id, ir_var)
+                        # Add the new variable to the list of variables we need to define in a "with" scope.
+                        new_args.append(ir_var)
+                        newVars.append((ir_var_name, arg))
+                    replacedArg = True
+            
+            print("hi")
+            if (replacedArg):
+                print("new args: ", new_args)
+                self.args = new_args.copy()
+            
+            # Wrap self in "with" statements that define the new variables we just created
+            # TODO: Maybe add a check to disable the check for caching so that we don't try to cache the new with nodes that we create.
+            body = self
+            print("new vars: ", newVars)
+            for (ir_var_name, ir_node) in newVars:
+                print("creating new with node")
+                body = IRnode.from_list(["with", ir_var_name, ir_node, body], self.typ, attempt_to_cache=False)
 
-        # Update args and value to include the new scoped "with" statement we just created.
-        # TODO: do we need to move more things?
-        self.value = body.value
-        self.args = body.args
+            # Update args and value to include the new scoped "with" statement we just created.
+            # TODO: do we need to move more things?
+            self.value = body.value
+            self.args = body.args
         
 
 
@@ -638,6 +651,7 @@ class IRnode:
         passthrough_metadata: dict[str, Any] = None,
         encoding: Encoding = Encoding.VYPER,
         _id=None,
+        attempt_to_cache = True,
     ) -> "IRnode":
         if isinstance(typ, str):  # pragma: nocover
             raise CompilerPanic(f"Expected type, not string: {typ}")
@@ -673,6 +687,7 @@ class IRnode:
                 is_self_call=is_self_call,
                 passthrough_metadata=passthrough_metadata,
                 _id=_id,
+                attempt_to_cache=attempt_to_cache
             )
         else:
             return cls(
@@ -689,4 +704,5 @@ class IRnode:
                 is_self_call=is_self_call,
                 passthrough_metadata=passthrough_metadata,
                 _id=_id,
+                attempt_to_cache=attempt_to_cache
             )
