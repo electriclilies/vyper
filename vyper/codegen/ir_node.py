@@ -392,13 +392,16 @@ class IRnode:
             self.args = new_args
         
         # Wrap self in "with" statements that define the new variables we just created
-        body_list = self.args
+        body = self
         print("new vars: ", newVars)
         for (ir_var_name, ir_node) in newVars:
-            body_list = ["with", ir_var_name, ir_node, body_list]
+            body = IRnode.from_list(["with", ir_var_name, ir_node, body], self.typ)
 
-        # Update args to include the new scoped "with" statement we just created.
-        self.args = body_list
+        # Update args and value to include the new scoped "with" statement we just created.
+        # TODO: do we need to move more things?
+        self.value = body.value
+        self.args = body.args
+        
 
 
     # deepcopy is a perf hotspot; it pays to optimize it a little
