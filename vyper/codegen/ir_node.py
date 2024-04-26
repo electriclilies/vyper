@@ -472,8 +472,6 @@ class IRnode:
     # which changes the child `.unique_symbols`. in the future it would
     # be good to tighten down the hatches so it is harder to modify
     # IRnode member variables.
-    # Maybe the fact that this is a cached_property is causing a problem?
-    # But changing to an ordinary property doesn't seem to be helping anything.
     @cached_property
     def unique_symbols(self):
         ret = set()
