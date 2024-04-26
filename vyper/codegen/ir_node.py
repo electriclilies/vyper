@@ -382,10 +382,15 @@ class IRnode:
                     # We're inlining arg, so don't try to replace the argument with a variable.
                     new_args.append(arg)
                 else:
+                    # If valency of the arg is not 1 or it's pass, we can't define it in a with statement, so don't attempt to cache it.
+                    if (arg.valency != 1 or arg.value == "pass"):
+                        new_args.append(arg)
+                        continue
                     # Check if we've already created a variable to represent this arg. If so, replace the argument IRnode with the variable.
                     cached_arg = self.get_cached_node(arg._id)
                     if cached_arg:
                         new_args.append(cached_arg)
+                        replacedArg = True
                     else:
                         # Create a variable to represent the argument, and add the variable to the cache.
                         ir_var_name = "ir_var_" + str(arg._id)
@@ -395,7 +400,7 @@ class IRnode:
                         # Add the new variable to the list of variables we need to define in a "with" scope.
                         new_args.append(ir_var)
                         newVars.append((ir_var_name, arg))
-                    replacedArg = True
+                        replacedArg = True
             
             print("hi")
             if (replacedArg):
