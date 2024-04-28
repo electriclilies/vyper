@@ -141,6 +141,7 @@ class IRnode:
 
     _id: int
     _next_id: int = -1
+    _cached_nodes = dict[int, "IRnode"] = {}
 
     def __init__(
         self,
@@ -157,6 +158,7 @@ class IRnode:
         is_self_call: bool = False,
         passthrough_metadata: dict[str, Any] = None,
         _id: int = None,
+        attempt_to_cache = True
     ):
         if args is None:
             args = []
@@ -359,7 +361,50 @@ class IRnode:
         else:  # pragma: nocover
             raise CompilerPanic(f"Invalid value for IR AST node: {self.value}")
         assert isinstance(self.args, list)
+        
+        if attempt_to_cache:
+            # Replace any cached arguments with the correct variable.
+            new_args = [] # Arg list containing references to the cached variables.
+            replaced_arg = False
+            newVars = [] # List of new variables that we need to define.
 
+            for arg in self.args:
+                should_inline = not arg.is_complex_ir
+                if should_inline:
+                    # We're inlining arg, so don't try to replace the argument with a variable.
+                    new_args.append(arg)
+                else:
+                    # If valency of the arg is not 1 or it's pass, we can't define it in a with statement, so don't attempt to cache it.
+                    if (arg.valency != 1 or arg.value == "pass"):
+                        new_args.append(arg)
+                        continue
+                    # Check if we've already created a variable to represent this arg. If so, replace the argument IRnode with the variable.
+                    cached_arg = self.get_cached_node(arg._id)
+                    if cached_arg:
+                        new_args.append(cached_arg)
+                        replaced_arg = True
+                    else:
+                        # Create a variable to represent the argument, and add the variable to the cache.
+                        ir_var_name = "ir_var_" + str(arg._id)
+                        ir_var = IRnode.from_list(ir_var_name, typ=self.typ, location=self.location, encoding=self.encoding, attempt_to_cache=False)
+                        self.cache_node(arg._id, ir_var)
+                        # Add the new variable to the list of variables we need to define in a "with" scope.
+                        new_args.append(ir_var)
+                        newVars.append((ir_var_name, arg))
+                        replaced_arg = True
+            
+            if (replaced_arg):
+                self.args = new_args.copy()
+            
+                # Wrap self in "with" statements that define the new variables we just created
+                body = self
+                for (ir_var_name, ir_node) in newVars:
+                    body = IRnode.from_list(["with", ir_var_name, ir_node, body], self.typ, attempt_to_cache=False)
+
+                # Update args and value to include the new scoped "with" statement we just created.
+                self.value = body.value
+                self.args = body.args
+        
     # deepcopy is a perf hotspot; it pays to optimize it a little
     def __deepcopy__(self, memo):
         cls = self.__class__
@@ -377,6 +422,19 @@ class IRnode:
         if self._id is None:
             self._id = self.generate_id()
 
+    @classmethod
+    def get_cached_node(cls, _id):
+        if _id in cls._cached_nodes:
+            return cls._cached_nodes[_id]
+        return None
+
+    @classmethod
+    def cache_node(cls, _id, ir_var):
+        if _id in cls._cached_nodes:
+            raise CompilerPanic("Can't cache a node twice!")
+        else:
+            cls._cached_nodes[_id] = ir_var
+        
     # TODO would be nice to rename to `gas_estimate` or `gas_bound`
     @property
     def gas(self):
@@ -581,6 +639,7 @@ class IRnode:
         passthrough_metadata: dict[str, Any] = None,
         encoding: Encoding = Encoding.VYPER,
         _id=None,
+        attempt_to_cache=True,
     ) -> "IRnode":
         if isinstance(typ, str):  # pragma: nocover
             raise CompilerPanic(f"Expected type, not string: {typ}")
@@ -616,6 +675,7 @@ class IRnode:
                 is_self_call=is_self_call,
                 passthrough_metadata=passthrough_metadata,
                 _id=_id,
+                attempt_to_cache=attempt_to_cache,
             )
         else:
             return cls(
@@ -632,4 +692,5 @@ class IRnode:
                 is_self_call=is_self_call,
                 passthrough_metadata=passthrough_metadata,
                 _id=_id,
+                attempt_to_cache=attempt_to_cache,
             )
