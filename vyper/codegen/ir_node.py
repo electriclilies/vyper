@@ -141,7 +141,7 @@ class IRnode:
 
     _id: int
     _next_id: int = -1
-    _cached_nodes = dict[int, "IRnode"] = {}
+    _cached_nodes : dict[int, "IRnode"] = {}
 
     def __init__(
         self,
